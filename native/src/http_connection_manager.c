@@ -32,7 +32,7 @@ static void s_destroy_connection_manager_wrapper(struct aws_dotnet_http_client_c
     aws_mem_release(aws_dotnet_get_allocator(), wrapper);
 }
 
-struct aws_dotnet_http_client_connection_manager *aws_dotnet_http_client_connection_manager_new(
+AWS_DOTNET_API struct aws_dotnet_http_client_connection_manager *aws_dotnet_http_client_connection_manager_new(
     struct aws_client_bootstrap *client_bootstrap,
     const char *host_name,
     uint16_t port,
@@ -73,6 +73,61 @@ on_error:
     return NULL;
 }
 
-void aws_dotnet_http_client_connection_manager_destroy(struct aws_dotnet_http_client_connection_manager *manager) {
+AWS_DOTNET_API void aws_dotnet_http_client_connection_manager_destroy(struct aws_dotnet_http_client_connection_manager *manager) {
     s_destroy_connection_manager_wrapper(manager);
+}
+
+struct aws_dotnet_connection_acquisition_data {
+    void (*callback)(struct aws_http_connection *connection, int error_code);
+};
+
+static void s_on_connection_setup_wrapper(
+    struct aws_http_connection *connection,
+    int error_code,
+    void *user_data) {
+    
+    struct aws_dotnet_connection_acquisition_data *cb_data = user_data;
+    if (cb_data && cb_data->callback) {
+        cb_data->callback(connection, error_code);
+    }
+    aws_mem_release(aws_dotnet_get_allocator(), cb_data);
+}
+
+AWS_DOTNET_API void aws_dotnet_http_client_connection_manager_acquire_connection(
+    struct aws_dotnet_http_client_connection_manager *manager,
+    void (*callback)(struct aws_http_connection *connection, int error_code)) {
+    
+    if (manager == NULL || manager->manager == NULL) {
+        if (callback) {
+            callback(NULL, AWS_ERROR_INVALID_ARGUMENT);
+        }
+        return;
+    }
+
+    struct aws_dotnet_connection_acquisition_data *cb_data = 
+        aws_mem_calloc(aws_dotnet_get_allocator(), 1, sizeof(struct aws_dotnet_connection_acquisition_data));
+    if (cb_data == NULL) {
+        if (callback) {
+            callback(NULL, aws_last_error());
+        }
+        return;
+    }
+
+    cb_data->callback = callback;
+
+    aws_http_connection_manager_acquire_connection(
+        manager->manager,
+        s_on_connection_setup_wrapper,
+        cb_data);
+}
+
+AWS_DOTNET_API void aws_dotnet_http_client_connection_manager_release_connection(
+    struct aws_dotnet_http_client_connection_manager *manager,
+    struct aws_http_connection *connection) {
+    
+    if (manager == NULL || manager->manager == NULL || connection == NULL) {
+        return;
+    }
+
+    aws_http_connection_manager_release_connection(manager->manager, connection);
 }
