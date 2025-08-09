@@ -65,9 +65,8 @@
   </ItemGroup>
 
   <Target Name="MakeLocalPackageSource" BeforeTargets="Restore;CollectPackageReferences">
-    <MakeDir Directories="$(SolutionDir)/packages" />
+    <MakeDir Directories="$(MSBuildProjectDirectory)/../packages" />
   </Target>
-
   <!--
     AwsCrtPlatformTarget is a non-msbuild property that tells the crt build system what target to build the native source for.  We need it separate and independent from msbuild's PlatformTarget property because
     the dotnet cli still has one or more bugs that make it very difficult to work with arm64 builds.  These issues can be worked around by not specifying a platform target until the final test step, but we still

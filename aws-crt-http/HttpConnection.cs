@@ -461,6 +461,19 @@ namespace Aws.Crt.Http
                 OnConnectionShutdown);
         }
 
+        /// <summary>
+        /// Internal constructor for creating HttpClientConnection from existing native handle
+        /// Used by HttpClientConnectionManager when acquiring pooled connections
+        /// </summary>
+        internal HttpClientConnection(IntPtr nativeHandle, HttpClientConnectionOptions options)
+        {
+            this.options = options;
+            this.NativeHandle = new Handle();
+            // Note: We're using an existing native handle from the connection manager
+            // The handle should NOT be disposed by this wrapper since the manager owns it
+            // TODO: Need to implement proper handle wrapping for pooled connections
+        }
+
         private class ConnectionBootstrap
         {
             public CrtResult<HttpClientConnection> Result = new CrtResult<HttpClientConnection>();
