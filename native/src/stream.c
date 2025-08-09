@@ -34,9 +34,37 @@ static int s_aws_input_stream_dotnet_read(struct aws_input_stream *stream, struc
     uint64_t buf_size = dest->capacity - dest->len;
     uint8_t *buf_ptr = dest->buffer + dest->len;
     uint64_t bytes_written = 0;
+
+    printf("DEADLOCK-TRACE-BODY-READ: CRT requesting request body data\n");
+    printf("DEADLOCK-TRACE-BODY-READ: Buffer size available: %llu bytes\n", (unsigned long long)buf_size);
+    printf("DEADLOCK-TRACE-BODY-READ: Current stream state: %d\n", (int)impl->state);
+    printf("DEADLOCK-TRACE-BODY-READ: Calling .NET read delegate...\n");
+
+    // Call the .NET delegate to read data from MemoryStream
     impl->state = impl->delegates.read(buf_ptr, buf_size, &bytes_written);
-    AWS_FATAL_ASSERT(bytes_written <= buf_size && "Buffer overflow detected streaming outgoing body");
+
+    printf("DEADLOCK-TRACE-BODY-READ: .NET read delegate completed\n");
+    printf("DEADLOCK-TRACE-BODY-READ: Bytes requested: %llu\n", (unsigned long long)buf_size);
+    printf("DEADLOCK-TRACE-BODY-READ: Bytes actually read: %llu\n", (unsigned long long)bytes_written);
+    printf("DEADLOCK-TRACE-BODY-READ: New stream state: %d (0=IN_PROGRESS, 1=DONE)\n", (int)impl->state);
+
+    if (bytes_written > buf_size) {
+        printf("DEADLOCK-TRACE-ERROR: Buffer overflow detected! bytes_written (%llu) > buf_size (%llu)\n", 
+               (unsigned long long)bytes_written, (unsigned long long)buf_size);
+        AWS_FATAL_ASSERT(false && "Buffer overflow detected streaming outgoing body");
+        return AWS_OP_ERR;
+    }
+
     dest->len += (size_t)bytes_written;
+
+    printf("DEADLOCK-TRACE-BODY-READ: Request body read completed successfully\n");
+    printf("DEADLOCK-TRACE-BODY-READ: Buffer final length: %zu bytes\n", dest->len);
+
+    if (impl->state == STREAM_STATE_DONE) {
+        printf("DEADLOCK-TRACE-BODY-READ: *** STREAM END REACHED - Request body fully transmitted ***\n");
+    } else if (bytes_written == 0) {
+        printf("DEADLOCK-TRACE-BODY-READ: *** NO DATA READ - Stream may be stuck ***\n");
+    }
 
     return AWS_OP_SUCCESS;
 }

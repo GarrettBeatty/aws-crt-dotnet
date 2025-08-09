@@ -66,19 +66,50 @@ namespace Aws.Crt.IO
 
         private int ReadInternal(byte[] buffer, ulong size, out ulong bytesWritten) {
             bytesWritten = 0;
-            if (BodyStream != null)
+            
+            Console.WriteLine($"DEADLOCK-TRACE-DOTNET-READ: CrtStreamWrapper.ReadInternal called");
+            Console.WriteLine($"DEADLOCK-TRACE-DOTNET-READ: Buffer size: {buffer?.Length ?? 0}, Requested: {size}");
+            
+            if (BodyStream != null && BodyStream.CanRead)
             {
-                var bufferStream = new MemoryStream(buffer);
-                long prevPosition = BodyStream.Position;
-                CRT.CopyStream(BodyStream, bufferStream, (int)size);
-                bytesWritten = (ulong)(BodyStream.Position - prevPosition);
-                if (BodyStream.Position != BodyStream.Length)
+                Console.WriteLine($"DEADLOCK-TRACE-DOTNET-READ: BodyStream position: {BodyStream.Position}, length: {BodyStream.Length}");
+                
+                // CRITICAL FIX: Read FROM BodyStream INTO buffer (not the other way around!)
+                int maxBytesToRead = (int)Math.Min((long)size, (long)buffer.Length);  
+                int availableBytes = (int)Math.Min((long)maxBytesToRead, BodyStream.Length - BodyStream.Position);
+
+                
+                Console.WriteLine($"DEADLOCK-TRACE-DOTNET-READ: Max bytes to read: {maxBytesToRead}, Available: {availableBytes}");
+                
+                if (availableBytes > 0)
                 {
-                    return (int) StreamState.InProgress;
+                    int bytesRead = BodyStream.Read(buffer, 0, availableBytes);
+                    bytesWritten = (ulong)bytesRead;
+                    
+                    Console.WriteLine($"DEADLOCK-TRACE-DOTNET-READ: Bytes actually read: {bytesRead}");
+                    Console.WriteLine($"DEADLOCK-TRACE-DOTNET-READ: New BodyStream position: {BodyStream.Position}");
+                    
+                    // Return InProgress if more data available, Done if we've reached the end
+                    if (BodyStream.Position >= BodyStream.Length)
+                    {
+                        Console.WriteLine($"DEADLOCK-TRACE-DOTNET-READ: *** END OF STREAM REACHED - Returning DONE ***");
+                        return (int)StreamState.Done;
+                    }
+                    else
+                    {
+                        Console.WriteLine($"DEADLOCK-TRACE-DOTNET-READ: More data available - Returning IN_PROGRESS");
+                        return (int)StreamState.InProgress;
+                    }
+                }
+                else
+                {
+                    Console.WriteLine($"DEADLOCK-TRACE-DOTNET-READ: No bytes available - Returning DONE");
+                    return (int)StreamState.Done;
                 }
             }
-
-            return (int) StreamState.Done;
+            
+            Console.WriteLine($"DEADLOCK-TRACE-DOTNET-READ: BodyStream is null or unreadable - Returning DONE");
+            return (int)StreamState.Done;
         }
 
         public CrtStreamWrapper(Stream stream)

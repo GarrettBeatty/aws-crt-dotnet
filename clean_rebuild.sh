@@ -19,5 +19,5 @@ rm -rf tests/obj
 rm -rf tools/Elasticurl/bin
 rm -rf tools/Elasticurl/ob
 
-dotnet build -f netstandard2.0 -p:PlatformTarget=x64 -p:CMakeConfig=Debug --configuration Debug
-dotnet pack -p:TargetFrameworks=netstandard2.0 --configuration Debug
+dotnet build -f netstandard2.0 -p:AwsCrtPlatformTarget=Arm64 --configuration Debug
+dotnet pack -p:TargetFrameworks=netstandard2.0 -p:AwsCrtPlatformTarget=Arm64 --configuration Debug

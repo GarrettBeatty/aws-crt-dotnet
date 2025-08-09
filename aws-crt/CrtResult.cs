@@ -115,6 +115,35 @@ namespace Aws.Crt
             }
         }
 
+        /// <summary>
+        /// Get the result with a timeout to prevent indefinite blocking
+        /// </summary>
+        /// <param name="timeoutMs">Timeout in milliseconds</param>
+        /// <returns>The result if completed within timeout</returns>
+        /// <exception cref="TimeoutException">Thrown when timeout is exceeded</exception>
+        public T Get(int timeoutMs)
+        {
+            bool completed = CompletionSignal.WaitOne(timeoutMs);
+            
+            if (!completed)
+            {
+                throw new TimeoutException($"Operation timed out after {timeoutMs}ms");
+            }
+
+            // may not be necessary, but let's start off safe
+            lock (this)
+            {
+                if (Exception != null)
+                {
+                    throw Exception;
+                }
+                else
+                {
+                    return Result;
+                }
+            }
+        }
+
         public OnCompletion CompletionCallback { 
             set 
             {
